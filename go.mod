@@ -1,4 +1,4 @@
-module github.com/katallaxie/template-go
+module github.com/katallaxie/agents
 
 go 1.25.5
 
