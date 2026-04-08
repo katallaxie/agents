@@ -41,7 +41,7 @@ func WithClient(client prompts.Chat) Opt {
 }
 
 // Task performs a task and emits events.
-func (a *AgentImpl) Task(ctx context.Context, req *TaskRequest) <-chan *Event {
+func (a *AgentImpl) Task(_ context.Context, _ *TaskRequest) <-chan *Event {
 	events := make(chan *Event)
 
 	return events
