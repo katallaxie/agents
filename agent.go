@@ -5,15 +5,24 @@ import (
 	"sync"
 
 	"github.com/katallaxie/prompts"
+	"github.com/katallaxie/prompts/callbacks"
 )
 
 // Agent represents an agent that can perform tasks and emit events.
 type Agent interface {
-	// Task performs a task and emits events.
-	Task(ctx context.Context, req *TaskRequest) <-chan *Event
-	// Error returns any error that occurred during the agent's operation.
-	Error() error
+	// Do performs a task and emits events.
+	Do(ctx context.Context, req *TaskRequest) error
 }
+
+// ToolExecutionMode represents the mode of tool execution for the agent.
+type ToolsExecutionMode string
+
+const (
+	// ToolsExecutionModeParallel indicates that tools should be executed in parallel.
+	ToolsExecutionModeParallel ToolsExecutionMode = "parallel"
+	// ToolsExecutionModeSequential indicates that tools should be executed sequentially.
+	ToolsExecutionModeSequential ToolsExecutionMode = "sequential"
+)
 
 // Options represents the options for configuring an agent.
 type Options struct {
@@ -23,6 +32,18 @@ type Options struct {
 	Client prompts.Prompt
 	// Tools is a list of tools that the agent can use to perform tasks.
 	Tools []prompts.Tool
+	// ToolsExecutionMode is the mode of tool execution for the agent.
+	ToolsExecutionMode ToolsExecutionMode
+}
+
+// DefaultOptions returns the default options for an agent.
+func DefaultOptions() *Options {
+	return &Options{
+		SystemPrompt:       prompts.ChatCompletionMessage{},
+		Client:             nil,
+		Tools:              []prompts.Tool{},
+		ToolsExecutionMode: ToolsExecutionModeParallel,
+	}
 }
 
 // Opt is an option for configuring an agent.
@@ -39,7 +60,7 @@ type AgentImpl struct {
 
 // NewAgent creates a new agent with the given options.
 func NewAgent(opts ...Opt) *AgentImpl {
-	options := new(Options)
+	options := DefaultOptions()
 
 	for _, opt := range opts {
 		opt(options)
@@ -72,11 +93,27 @@ func WithTools(tools ...prompts.Tool) Opt {
 	}
 }
 
-// Task performs a task and emits events.
-func (a *AgentImpl) Task(_ context.Context, _ *TaskRequest) <-chan *Event {
-	events := make(chan *Event)
+// Do performs a task and emits events.
+func (a *AgentImpl) Do(ctx context.Context, req *TaskRequest) error {
+	messages := make(chan prompts.ChatCompletionMessage, 1024)
+	messages <- prompts.ChatCompletionMessage{
+		Role:    prompts.RoleUser,
+		Content: a.options.SystemPrompt.Content,
+	}
 
-	return events
+	for message := range messages {
+		prompt := &prompts.ChatCompletionRequest{
+			Messages: []prompts.ChatCompletionMessage{message},
+			Tools:    a.options.Tools,
+		}
+
+		err := a.options.Client.SendStreamCompletionRequest(ctx, prompt, callbacks.Print)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Error returns any error that occurred during the agent's operation.

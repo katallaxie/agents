@@ -19,5 +19,5 @@ func main() {
 		Description: "Write a haiku about the beauty of nature.",
 	}
 
-	_ = agent.Task(context.Background(), task)
+	_ = agent.Do(context.Background(), task)
 }
